@@ -1,14 +1,13 @@
-fetch('/data/latest-mti.json')
-  .then(res => res.json())
-  .then(result => {
-    console.log("API RESULT:", result);
+const fs = require("fs");
 
-    document.getElementById('count').innerText =
-      "Total productions: " + result.count;
-  })
-  .catch(err => {
-    console.error("FETCH ERROR:", err);
+const output = {
+  success: true,
+  count: data.length,
+  data: data,
+  updated_at: new Date().toISOString()
+};
 
-    document.getElementById('count').innerText =
-      "Failed to load data";
-  });
+fs.writeFileSync(
+  "public/data/latest-mti.json",
+  JSON.stringify(output, null, 2)
+);
