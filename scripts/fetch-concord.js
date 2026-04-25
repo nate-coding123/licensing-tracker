@@ -1,36 +1,46 @@
 const fs = require("fs");
 
-async function fetchPage(page) {
-  const url = `https://shop.concordtheatricals.com/now-playing?Type=Object&HasValues=True&First=${page}&Last=${page}&Count=1&Root=%22table_page%22%3A%20%22${page}%22`;
+// IMPORTANT: DataTables-style pagination (this is what Concord is actually using)
+async function fetchPage(start = 0, length = 50) {
+  const url = `https://shop.concordtheatricals.com/now-playing?start=${start}&length=${length}`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0"
+    }
+  });
+
   return await res.text();
 }
 
+// Parse HTML <tr> rows into structured objects
 function parseRows(html) {
   const rows = [];
 
   const trMatches = html.match(/<tr[\s\S]*?<\/tr>/g) || [];
 
   for (const tr of trMatches) {
-    if (tr.includes("tfoot")) continue;
+    // skip footer/pagination row
+    if (tr.includes("tfoot") || tr.includes("paging")) continue;
 
     const cells = [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)]
       .map(m =>
         m[1]
-          .replace(/<[^>]*>/g, "")
+          .replace(/<[^>]*>/g, "") // strip HTML tags
+          .replace(/\s+/g, " ")
           .trim()
       );
 
-    if (cells.length >= 6) {
+    // basic validation
+    if (cells.length >= 5 && cells[0]) {
       rows.push({
-        title: cells[0],
-        venue: cells[1],
-        authors: cells[2],
-        city: cells[3],
-        state: cells[4],
-        start: cells[5],
-        end: cells[6]
+        title: cells[0] || "",
+        venue: cells[1] || "",
+        authors: cells[2] || "",
+        city: cells[3] || "",
+        state: cells[4] || "",
+        start: cells[5] || "",
+        end: cells[6] || ""
       });
     }
   }
@@ -39,19 +49,26 @@ function parseRows(html) {
 }
 
 (async () => {
-  let page = 1;
+  let start = 0;
+  const length = 50;
   let all = [];
 
-  while (page <= 200) {
-    console.log("Fetching page", page);
+  while (true) {
+    console.log(`Fetching start=${start}`);
 
-    const html = await fetchPage(page);
+    const html = await fetchPage(start, length);
     const rows = parseRows(html);
 
+    console.log(`→ found ${rows.length} rows`);
+
+    // stop condition
     if (!rows.length) break;
 
     all.push(...rows);
-    page++;
+    start += length;
+
+    // safety limit (prevents infinite loops during testing)
+    if (start > 200000) break;
   }
 
   const output = {
@@ -62,10 +79,11 @@ function parseRows(html) {
     updated_at: new Date().toISOString()
   };
 
+  // IMPORTANT: match MTI structure location
   fs.writeFileSync(
     "data/latest-concord.json",
     JSON.stringify(output, null, 2)
   );
 
-  console.log("Done:", all.length);
+  console.log("DONE. Total rows:", all.length);
 })();
