@@ -1,19 +1,83 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Licensing Tracker</title>
-</head>
-<body>
-  <h1>MTI Productions</h1>
-  <div id="count"></div>
+  <meta charset="UTF-8" />
+  <title>MTI Licensing Tracker</title>
 
-  <script>
-    fetch('data/latest-mti.json')
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('count').innerText =
-          "Total productions: " + data.length;
-      });
-  </script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 20px;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      font-size: 12px;
+    }
+
+    th {
+      background: #f4f4f4;
+      text-align: left;
+    }
+
+    tr:nth-child(even) {
+      background: #fafafa;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>MTI Productions</h1>
+<div id="count">Loading...</div>
+
+<table id="table">
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Location</th>
+      <th>Organization</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+fetch('https://licensingtracker.netlify.app/data/latest-mti.json')
+  .then(res => res.json())
+  .then(result => {
+    const data = result.data; // IMPORTANT: your array is here
+
+    document.getElementById('count').innerText =
+      "Total productions: " + result.count;
+
+    const tbody = document.querySelector("#table tbody");
+
+    data.forEach(item => {
+      const row = document.createElement("tr");
+
+      row.innerHTML = `
+        <td>${item.title || "N/A"}</td>
+        <td>${item.location || "N/A"}</td>
+        <td>${item.organization || "N/A"}</td>
+      `;
+
+      tbody.appendChild(row);
+    });
+  })
+  .catch(err => {
+    console.error(err);
+    document.getElementById('count').innerText =
+      "Failed to load data";
+  });
+</script>
+
 </body>
 </html>
