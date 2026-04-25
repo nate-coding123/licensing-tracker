@@ -69,7 +69,30 @@ function parseRows(html) {
 
   console.log("Starting Concord scrape...");
 
-  while (page <= 200) {
+let page = 1;
+let all = [];
+let seen = new Set();
+
+while (true) {
+  console.log("Fetching page", page);
+
+  const html = await fetchTablePage(page);
+  const rows = parseRows(html);
+
+  if (!rows.length) break;
+
+  for (const r of rows) {
+    const key = `${r.title}-${r.venue}-${r.start}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    all.push(r);
+  }
+
+  // stop if page stops changing meaningfully
+  if (rows.length < 2) break;
+
+  page++;
+}
     const html = await fetchTablePage(page);
 
     const rows = parseRows(html);
