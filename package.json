@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "scripts": {
     "fetch:concord": "node scripts/fetch-concord.js",
-    "build": "npm run fetch:concord"
+    "fetch:mti": "node scripts/fetch-mti.js",
+    "fetch:all": "npm run fetch:concord && npm run fetch:mti",
+    "build": "npm run fetch:all"
   },
   "engines": {
-    "node": "18.x"
+    "node": "22.x"
   }
 }
