@@ -23,27 +23,49 @@ async function fetchMTI() {
 }
 
 // ---------------- CONCORD ----------------
-async function fetchConcord() {
-  const results = [];
-  let page = 1;
+function parseConcord(html) {
+  const rows = [];
 
-  while (page < 300) {
-    const url = `https://shop.concordtheatricals.com/now-playing?Type=Object&HasValues=True&First=${page}&Last=${page}&Count=1&Root=%22table_page%22%3A%20%22${page}%22`;
+  // match table rows more safely
+  const trMatches = html.match(/<tr[\s\S]*?<\/tr>/g) || [];
 
-    const res = await fetch(url);
-    const html = await res.text();
+  for (const tr of trMatches) {
+    // skip headers + footers
+    if (tr.includes("tfoot")) continue;
+    if (tr.includes("paging")) continue;
+    if (tr.includes("Title</")) continue;
+    if (tr.includes("Producer</")) continue;
 
-    const rows = parseConcord(html);
+    const cells = [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)]
+      .map(m =>
+        m[1]
+          .replace(/<[^>]*>/g, "")
+          .replace(/&nbsp;/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+      );
 
-    if (!rows.length) break;
+    // IMPORTANT: loosen requirement
+    if (cells.length < 5) continue;
 
-    results.push(...rows);
-    page++;
+    const title = cells[0];
+
+    // filter out empty or junk rows
+    if (!title || title.toLowerCase().includes("title")) continue;
+
+    rows.push({
+      title: cells[0] || "N/A",
+      venue: cells[1] || "N/A",
+      authors: cells[2] || "N/A",
+      city: cells[3] || "N/A",
+      state: cells[4] || "N/A",
+      start: cells[5] || "N/A",
+      end: cells[6] || "N/A"
+    });
   }
 
-  return results;
+  return rows;
 }
-
 // ---------------- CONCORD PARSER ----------------
 function parseConcord(html) {
   const rows = [];
