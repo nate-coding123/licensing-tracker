@@ -1,8 +1,11 @@
 {
   "name": "licensing-tracker",
   "version": "1.0.0",
-  "private": true,
   "scripts": {
-    "build": "node scripts/fetch-all.js"
+    "fetch:concord": "node scripts/fetch-concord.js",
+    "build": "npm run fetch:concord"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
