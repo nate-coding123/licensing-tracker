@@ -1,17 +1,16 @@
-import fs from "fs";
+fetch('/data/latest-mti.json')
+  .then(res => {
+    if (!res.ok) throw new Error("Failed to load JSON");
+    return res.json();
+  })
+  .then(data => {
+    console.log("DATA:", data);
 
-const URL = "https://www.mtishows.com/map-search-ajax.php?bounds_north=90&bounds_south=-90&bounds_east=180&bounds_west=-180&include_jr_shows=1&limit=100000";
-
-async function run() {
-  const res = await fetch(URL);
-  const data = await res.json();
-
-  const today = new Date().toISOString().slice(0, 10);
-
-  fs.writeFileSync(`data/mti-${today}.json`, JSON.stringify(data, null, 2));
-  fs.writeFileSync(`data/latest-mti.json`, JSON.stringify(data));
-
-  console.log(`Saved ${data.length} records`);
-}
-
-run();
+    document.getElementById('count').innerText =
+      "Total productions: " + data.length;
+  })
+  .catch(err => {
+    console.error(err);
+    document.getElementById('count').innerText =
+      "Error loading data";
+  });
