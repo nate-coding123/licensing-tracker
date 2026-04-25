@@ -2,8 +2,14 @@ const fs = require("fs");
 
 // Node 18+ on Netlify supports fetch
 // If not, fallback to node-fetch
-const fetchFn = global.fetch || (...args) =>
-  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+let fetchFn;
+
+if (global.fetch) {
+  fetchFn = global.fetch;
+} else {
+  fetchFn = (...args) =>
+    import("node-fetch").then(({ default: fetch }) => fetch(...args));
+}
 
 async function fetchTablePage(page) {
   const url = `https://shop.concordtheatricals.com/now-playing?Type=Object&HasValues=True&First=${page}&Last=${page}&Count=1&Root=%22table_page%22%3A%20%22${page}%22`;
