@@ -31,22 +31,40 @@ async function fetchMTI() {
 // CONCORD FETCH (SAFE HTML PARSER)
 // -----------------------------
 async function fetchConcord() {
-  const url =
-    "https://shop.concordtheatricals.com/now-playing?Type=Object&HasValues=True&First=1&Last=1&Count=1&Root=%22table_page%22%3A%20%221%22";
+  const base =
+    "https://shop.concordtheatricals.com/now-playing";
 
-  const res = await fetchFn(url);
+  const url =
+    base +
+    "?Type=Object&HasValues=True&First=1&Last=1&Count=1&Root=%22table_page%22%3A%20%221%22";
+
+  const res = await fetchFn(url, {
+    headers: {
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+      "accept":
+        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en-US,en;q=0.9",
+      "referer": "https://shop.concordtheatricals.com/"
+    }
+  });
+
   const html = await res.text();
+
+  // DEBUG (important for you right now)
+  console.log("Concord HTML length:", html.length);
 
   return parseConcordRows(html);
 }
-
 function parseConcordRows(html) {
   const rows = [];
 
   const trMatches = html.match(/<tr[\s\S]*?<\/tr>/g) || [];
 
   for (const tr of trMatches) {
+    // skip footer/pagination/header junk
     if (tr.includes("tfoot")) continue;
+    if (tr.includes("paging")) continue;
     if (!tr.includes("/p/")) continue;
 
     const cells = [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)]
@@ -55,9 +73,11 @@ function parseConcordRows(html) {
           .replace(/<[^>]*>/g, "")
           .replace(/\s+/g, " ")
           .trim()
-      );
+      )
+      .filter(Boolean);
 
-    if (cells.length < 6) continue;
+    // MUST have at least title + venue
+    if (cells.length < 2) continue;
 
     rows.push({
       title: cells[0] || "",
@@ -70,9 +90,9 @@ function parseConcordRows(html) {
     });
   }
 
+  console.log("Parsed Concord rows:", rows.length);
   return rows;
 }
-
 // -----------------------------
 // MAIN
 // -----------------------------
