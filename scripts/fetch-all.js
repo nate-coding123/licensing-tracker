@@ -1,18 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-async function safeRun(label, fn) {
-  try {
-    console.log(`\n=== ${label} START ===`);
-    const result = await fn();
-    console.log(`=== ${label} DONE: ${result.length} ===`);
-    return result;
-  } catch (err) {
-    console.error(`!!! ${label} FAILED`, err);
-    return [];
-  }
-}
-
+// ---------------- SAFE HELPERS ----------------
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -55,6 +44,7 @@ async function fetchConcord() {
   return results;
 }
 
+// ---------------- CONCORD PARSER ----------------
 function parseConcord(html) {
   const rows = [];
 
@@ -85,10 +75,24 @@ function parseConcord(html) {
 
 // ---------------- MAIN ----------------
 (async () => {
-  console.log("BUILD START");
+  console.log("Starting build...");
 
-  const mti = await safeRun("MTI", fetchMTI);
-  const concord = await safeRun("CONCORD", fetchConcord);
+  let mti = [];
+  let concord = [];
+
+  try {
+    console.log("Fetching MTI...");
+    mti = await fetchMTI();
+  } catch (e) {
+    console.log("MTI failed:", e.message);
+  }
+
+  try {
+    console.log("Fetching Concord...");
+    concord = await fetchConcord();
+  } catch (e) {
+    console.log("Concord failed:", e.message);
+  }
 
   const base = path.join(process.cwd(), "public", "data");
 
@@ -108,5 +112,6 @@ function parseConcord(html) {
     updated_at: new Date().toISOString()
   });
 
-  console.log("\nBUILD DONE");
+  console.log("DONE MTI:", mti.length);
+  console.log("DONE CONCORD:", concord.length);
 })();
