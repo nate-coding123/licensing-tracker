@@ -10,21 +10,19 @@
       padding: 20px;
     }
 
-    input {
-      margin: 5px;
-      padding: 6px;
-    }
+    h1 { margin-bottom: 5px; }
 
     table {
       border-collapse: collapse;
       width: 100%;
-      margin-top: 20px;
+      margin-top: 10px;
       font-size: 13px;
     }
 
     th, td {
       border: 1px solid #ddd;
-      padding: 8px;
+      padding: 6px;
+      vertical-align: top;
     }
 
     th {
@@ -33,15 +31,20 @@
       top: 0;
     }
 
+    th input {
+      width: 95%;
+      margin-top: 4px;
+      padding: 4px;
+      font-size: 12px;
+    }
+
     tr:nth-child(even) {
       background: #fafafa;
     }
 
-    .filters {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 10px;
-      margin-top: 10px;
+    .sortable {
+      cursor: pointer;
+      user-select: none;
     }
   </style>
 </head>
@@ -51,29 +54,42 @@
 <h1>MTI Productions</h1>
 <div id="count">Loading...</div>
 
-<div class="filters">
-  <input id="titleFilter" placeholder="Filter by Show Title" />
-  <input id="locationFilter" placeholder="Filter by Location" />
-  <input id="venueFilter" placeholder="Filter by Theatre" />
-  <input id="orgFilter" placeholder="Filter by Organization" />
-  <input id="dateFilter" placeholder="Filter by Start Date (YYYY-MM-DD)" />
-</div>
-
 <table>
   <thead>
     <tr>
-      <th>Show</th>
-      <th>Location</th>
-      <th>Venue</th>
-      <th>Organization</th>
-      <th>Dates</th>
+      <th class="sortable" onclick="sortBy('title')">
+        Show
+        <br><input id="f-title" placeholder="filter..." />
+      </th>
+
+      <th class="sortable" onclick="sortBy('location_text')">
+        Location
+        <br><input id="f-location" placeholder="filter..." />
+      </th>
+
+      <th class="sortable" onclick="sortBy('venue')">
+        Theatre
+        <br><input id="f-venue" placeholder="filter..." />
+      </th>
+
+      <th class="sortable" onclick="sortBy('organization')">
+        Organization
+        <br><input id="f-org" placeholder="filter..." />
+      </th>
+
+      <th class="sortable" onclick="sortBy('start')">
+        Start Date
+        <br><input id="f-date" placeholder="YYYY-MM-DD" />
+      </th>
     </tr>
   </thead>
+
   <tbody id="rows"></tbody>
 </table>
 
 <script>
 let allData = [];
+let currentSort = { key: "start", dir: "desc" };
 
 function cleanOrg(org) {
   const bad = "Mti Test - Music Theatre Int'l- Licensing";
@@ -81,62 +97,91 @@ function cleanOrg(org) {
   return org;
 }
 
+function compare(a, b, key) {
+  if (key === "start") {
+    return new Date(a.start) - new Date(b.start);
+  }
+  return (a[key] || "").localeCompare(b[key] || "");
+}
+
 function render(data) {
-  const tbody = document.getElementById('rows');
+  const tbody = document.getElementById("rows");
   tbody.innerHTML = "";
 
   data.forEach(item => {
-    const row = document.createElement('tr');
+    const row = document.createElement("tr");
 
     row.innerHTML = `
       <td>${item.title || ""}</td>
       <td>${item.location_text || ""}</td>
       <td>${item.venue || ""}</td>
       <td>${cleanOrg(item.organization)}</td>
-      <td>${item.date_range || ""}</td>
+      <td>${item.start || ""}</td>
     `;
 
     tbody.appendChild(row);
   });
 
-  document.getElementById('count').innerText =
+  document.getElementById("count").innerText =
     "Total productions: " + data.length;
 }
 
 function applyFilters() {
-  const title = document.getElementById('titleFilter').value.toLowerCase();
-  const location = document.getElementById('locationFilter').value.toLowerCase();
-  const venue = document.getElementById('venueFilter').value.toLowerCase();
-  const org = document.getElementById('orgFilter').value.toLowerCase();
-  const date = document.getElementById('dateFilter').value;
+  const title = document.getElementById("f-title").value.toLowerCase();
+  const location = document.getElementById("f-location").value.toLowerCase();
+  const venue = document.getElementById("f-venue").value.toLowerCase();
+  const org = document.getElementById("f-org").value.toLowerCase();
+  const date = document.getElementById("f-date").value;
 
-  const filtered = allData.filter(item => {
+  let filtered = allData.filter(item => {
     return (
       (item.title || "").toLowerCase().includes(title) &&
       (item.location_text || "").toLowerCase().includes(location) &&
       (item.venue || "").toLowerCase().includes(venue) &&
-      (cleanOrg(item.organization)).toLowerCase().includes(org) &&
-      (date === "" || (item.start && item.start.includes(date)))
+      cleanOrg(item.organization).toLowerCase().includes(org) &&
+      (date === "" || (item.start || "").includes(date))
     );
   });
 
+  sortData(filtered);
   render(filtered);
 }
 
-fetch('/data/latest-mti.json')
+function sortData(data) {
+  data.sort((a, b) => {
+    let res = compare(a, b, currentSort.key);
+    return currentSort.dir === "asc" ? res : -res;
+  });
+}
+
+function sortBy(key) {
+  if (currentSort.key === key) {
+    currentSort.dir = currentSort.dir === "asc" ? "desc" : "asc";
+  } else {
+    currentSort.key = key;
+    currentSort.dir = "asc";
+  }
+  applyFilters();
+}
+
+fetch("/data/latest-mti.json")
   .then(res => res.json())
   .then(result => {
     allData = result.data;
 
+    // DEFAULT SORT: most recent first
+    allData.sort((a, b) => new Date(b.start) - new Date(a.start));
+
     render(allData);
 
-    document.querySelectorAll("input").forEach(input => {
-      input.addEventListener("input", applyFilters);
-    });
+    document.querySelectorAll("input").forEach(i =>
+      i.addEventListener("input", applyFilters)
+    );
   })
   .catch(err => {
     console.error(err);
-    document.getElementById('count').innerText = "Failed to load data";
+    document.getElementById("count").innerText =
+      "Failed to load data";
   });
 </script>
 
