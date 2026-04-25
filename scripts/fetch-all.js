@@ -4,48 +4,24 @@ const path = require("path");
 const fetchMTI = require("./fetch-mti");
 const fetchConcord = require("./fetch-concord");
 
-const DATA_DIR = path.join(process.cwd(), "public", "data");
-
-function safeWrite(filePath, data) {
-  try {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.log("Write failed:", filePath, e.message);
-  }
-}
-
 (async () => {
-  console.log("🚀 Build started");
+  console.log("Starting build...");
 
-  let mti = [];
-  let concord = [];
+  const mti = await fetchMTI().catch(() => []);
+  const concord = await fetchConcord().catch(() => []);
 
-  try {
-    mti = await fetchMTI();
-    console.log("MTI:", mti.length);
-  } catch (e) {
-    console.log("MTI error:", e.message);
-  }
+  const dataDir = path.join(process.cwd(), "public", "data");
+  fs.mkdirSync(dataDir, { recursive: true });
 
-  try {
-    concord = await fetchConcord();
-    console.log("Concord:", concord.length);
-  } catch (e) {
-    console.log("Concord error:", e.message);
-  }
+  fs.writeFileSync(
+    path.join(dataDir, "latest-mti.json"),
+    JSON.stringify({ success: true, data: mti }, null, 2)
+  );
 
-  safeWrite(path.join(DATA_DIR, "latest-mti.json"), {
-    success: true,
-    count: mti.length,
-    data: mti
-  });
+  fs.writeFileSync(
+    path.join(dataDir, "latest-concord.json"),
+    JSON.stringify({ success: true, data: concord }, null, 2)
+  );
 
-  safeWrite(path.join(DATA_DIR, "latest-concord.json"), {
-    success: true,
-    count: concord.length,
-    data: concord
-  });
-
-  console.log("✅ Done build");
+  console.log("DONE:", mti.length, concord.length);
 })();
