@@ -1,12 +1,13 @@
 fetch('/data/latest-mti.json')
   .then(res => res.json())
-  .then(data => {
-    console.log("RAW DATA:", data);
-    console.log("IS ARRAY:", Array.isArray(data));
+  .then(result => {
+    console.log("FULL RESULT:", result);
 
     document.getElementById('count').innerText =
-      Array.isArray(data)
-        ? "Total productions: " + data.length
-        : "Data format mismatch";
+      "Total productions: " + result.count;
   })
-  .catch(err => console.error("FETCH ERROR:", err));
+  .catch(err => {
+    console.error(err);
+    document.getElementById('count').innerText =
+      "Error loading data";
+  });
