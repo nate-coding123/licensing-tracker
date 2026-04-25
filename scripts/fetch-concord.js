@@ -1,74 +1,79 @@
 const fs = require("fs");
 
-// IMPORTANT: DataTables-style pagination (this is what Concord is actually using)
-async function fetchPage(start = 0, length = 50) {
-  const url = `https://shop.concordtheatricals.com/now-playing?start=${start}&length=${length}`;
+// Node 18+ on Netlify supports fetch
+// If not, fallback to node-fetch
+const fetchFn = global.fetch || (...args) =>
+  import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0"
-    }
-  });
+async function fetchTablePage(page) {
+  const url = `https://shop.concordtheatricals.com/now-playing?Type=Object&HasValues=True&First=${page}&Last=${page}&Count=1&Root=%22table_page%22%3A%20%22${page}%22`;
+
+  const res = await fetchFn(url);
+
+  if (!res.ok) {
+    console.log("Failed page:", page, res.status);
+    return "";
+  }
 
   return await res.text();
 }
 
-// Parse HTML <tr> rows into structured objects
+function clean(html) {
+  return html
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function parseRows(html) {
   const rows = [];
 
   const trMatches = html.match(/<tr[\s\S]*?<\/tr>/g) || [];
 
   for (const tr of trMatches) {
-    // skip footer/pagination row
-    if (tr.includes("tfoot") || tr.includes("paging")) continue;
+    if (tr.includes("tfoot")) continue;
 
-    const cells = [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)]
-      .map(m =>
-        m[1]
-          .replace(/<[^>]*>/g, "") // strip HTML tags
-          .replace(/\s+/g, " ")
-          .trim()
-      );
+    const cellMatches = [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)];
 
-    // basic validation
-    if (cells.length >= 5 && cells[0]) {
-      rows.push({
-        title: cells[0] || "",
-        venue: cells[1] || "",
-        authors: cells[2] || "",
-        city: cells[3] || "",
-        state: cells[4] || "",
-        start: cells[5] || "",
-        end: cells[6] || ""
-      });
-    }
+    const cells = cellMatches.map(m => clean(m[1]));
+
+    if (cells.length < 6) continue;
+
+    const [title, venue, authors, city, state, start, end] = cells;
+
+    rows.push({
+      title: title || "N/A",
+      venue: venue || "N/A",
+      authors: authors || "N/A",
+      city: city || "N/A",
+      state: state || "N/A",
+      start: start || "N/A",
+      end: end || "N/A"
+    });
   }
 
   return rows;
 }
 
 (async () => {
-  let start = 0;
-  const length = 50;
+  let page = 1;
   let all = [];
 
-  while (true) {
-    console.log(`Fetching start=${start}`);
+  console.log("Starting Concord scrape...");
 
-    const html = await fetchPage(start, length);
+  while (page <= 200) {
+    const html = await fetchTablePage(page);
+
     const rows = parseRows(html);
 
-    console.log(`→ found ${rows.length} rows`);
+    console.log(`Page ${page}:`, rows.length);
 
-    // stop condition
     if (!rows.length) break;
 
     all.push(...rows);
-    start += length;
-
-    // safety limit (prevents infinite loops during testing)
-    if (start > 200000) break;
+    page++;
   }
 
   const output = {
@@ -79,11 +84,10 @@ function parseRows(html) {
     updated_at: new Date().toISOString()
   };
 
-  // IMPORTANT: match MTI structure location
   fs.writeFileSync(
-    "data/latest-concord.json",
+    "public/data/latest-concord.json",
     JSON.stringify(output, null, 2)
   );
 
-  console.log("DONE. Total rows:", all.length);
+  console.log("Done Concord:", all.length);
 })();
