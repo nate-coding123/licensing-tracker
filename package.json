@@ -3,4 +3,7 @@
   "scripts": {
     "fetch:mti": "node scripts/fetch-mti.js"
   }
+  "scripts": {
+  "build": "node scripts/fetch-all.js"
+}
 }
