@@ -90,10 +90,12 @@ function parseRows(html) {
     updated_at: new Date().toISOString()
   };
 
-  fs.writeFileSync(
-    "public/data/latest-concord.json",
-    JSON.stringify(output, null, 2)
-  );
+ const path = "public/data/latest-concord.json";
+
+// ensure folder exists
+fs.mkdirSync("public/data", { recursive: true });
+
+fs.writeFileSync(path, JSON.stringify(output, null, 2));
 
   console.log("Done Concord:", all.length);
 })();
