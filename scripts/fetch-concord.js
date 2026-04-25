@@ -7,29 +7,22 @@ async function fetchPage(page) {
   return await res.text();
 }
 
-// extract rows from HTML
 function parseRows(html) {
-  const rowRegex = /<tr>([\s\S]*?)<\/tr>/g;
-  const cellRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g;
-
   const rows = [];
-  let match;
 
-  while ((match = rowRegex.exec(html)) !== null) {
-    const rowHtml = match[1];
+  const trMatches = html.match(/<tr[\s\S]*?<\/tr>/g) || [];
 
-    const cells = [];
-    let cellMatch;
+  for (const tr of trMatches) {
+    if (tr.includes("tfoot")) continue;
 
-    while ((cellMatch = cellRegex.exec(rowHtml)) !== null) {
-      cells.push(
-        cellMatch[1]
-          .replace(/<[^>]*>/g, "") // strip HTML tags
+    const cells = [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)]
+      .map(m =>
+        m[1]
+          .replace(/<[^>]*>/g, "")
           .trim()
       );
-    }
 
-    if (cells.length > 0) {
+    if (cells.length >= 6) {
       rows.push({
         title: cells[0],
         venue: cells[1],
@@ -49,7 +42,7 @@ function parseRows(html) {
   let page = 1;
   let all = [];
 
-  while (true) {
+  while (page <= 200) {
     console.log("Fetching page", page);
 
     const html = await fetchPage(page);
@@ -59,9 +52,6 @@ function parseRows(html) {
 
     all.push(...rows);
     page++;
-
-    // safety limit so it doesn't loop forever while testing
-    if (page > 200) break;
   }
 
   const output = {
@@ -73,7 +63,7 @@ function parseRows(html) {
   };
 
   fs.writeFileSync(
-    "public/data/latest-concord.json",
+    "data/latest-concord.json",
     JSON.stringify(output, null, 2)
   );
 
