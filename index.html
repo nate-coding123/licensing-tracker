@@ -10,8 +10,9 @@
       padding: 20px;
     }
 
-    h1 {
-      margin-bottom: 5px;
+    input {
+      margin: 5px;
+      padding: 6px;
     }
 
     table {
@@ -24,18 +25,23 @@
     th, td {
       border: 1px solid #ddd;
       padding: 8px;
-      vertical-align: top;
     }
 
     th {
       background: #f4f4f4;
-      text-align: left;
       position: sticky;
       top: 0;
     }
 
     tr:nth-child(even) {
       background: #fafafa;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -44,6 +50,14 @@
 
 <h1>MTI Productions</h1>
 <div id="count">Loading...</div>
+
+<div class="filters">
+  <input id="titleFilter" placeholder="Filter by Show Title" />
+  <input id="locationFilter" placeholder="Filter by Location" />
+  <input id="venueFilter" placeholder="Filter by Theatre" />
+  <input id="orgFilter" placeholder="Filter by Organization" />
+  <input id="dateFilter" placeholder="Filter by Start Date (YYYY-MM-DD)" />
+</div>
 
 <table>
   <thead>
@@ -59,37 +73,70 @@
 </table>
 
 <script>
+let allData = [];
+
+function cleanOrg(org) {
+  const bad = "Mti Test - Music Theatre Int'l- Licensing";
+  if (!org || org.trim() === "" || org === bad) return "N/A";
+  return org;
+}
+
+function render(data) {
+  const tbody = document.getElementById('rows');
+  tbody.innerHTML = "";
+
+  data.forEach(item => {
+    const row = document.createElement('tr');
+
+    row.innerHTML = `
+      <td>${item.title || ""}</td>
+      <td>${item.location_text || ""}</td>
+      <td>${item.venue || ""}</td>
+      <td>${cleanOrg(item.organization)}</td>
+      <td>${item.date_range || ""}</td>
+    `;
+
+    tbody.appendChild(row);
+  });
+
+  document.getElementById('count').innerText =
+    "Total productions: " + data.length;
+}
+
+function applyFilters() {
+  const title = document.getElementById('titleFilter').value.toLowerCase();
+  const location = document.getElementById('locationFilter').value.toLowerCase();
+  const venue = document.getElementById('venueFilter').value.toLowerCase();
+  const org = document.getElementById('orgFilter').value.toLowerCase();
+  const date = document.getElementById('dateFilter').value;
+
+  const filtered = allData.filter(item => {
+    return (
+      (item.title || "").toLowerCase().includes(title) &&
+      (item.location_text || "").toLowerCase().includes(location) &&
+      (item.venue || "").toLowerCase().includes(venue) &&
+      (cleanOrg(item.organization)).toLowerCase().includes(org) &&
+      (date === "" || (item.start && item.start.includes(date)))
+    );
+  });
+
+  render(filtered);
+}
+
 fetch('/data/latest-mti.json')
   .then(res => res.json())
   .then(result => {
+    allData = result.data;
 
-    const data = result.data;
+    render(allData);
 
-    // show total count from API
-    document.getElementById('count').innerText =
-      "Total productions: " + result.count;
-
-    const tbody = document.getElementById('rows');
-
-    data.forEach(item => {
-      const row = document.createElement('tr');
-
-      row.innerHTML = `
-        <td>${item.title || ""}</td>
-        <td>${item.location_text || ""}</td>
-        <td>${item.venue || ""}</td>
-        <td>${item.organization || ""}</td>
-        <td>${item.date_range || ""}</td>
-      `;
-
-      tbody.appendChild(row);
+    document.querySelectorAll("input").forEach(input => {
+      input.addEventListener("input", applyFilters);
     });
-
   })
   .catch(err => {
     console.error(err);
-    document.getElementById('count').innerText =
-      "Failed to load data";
+    document.getElementById('count').innerText = "Failed to load data";
   });
 </script>
 
