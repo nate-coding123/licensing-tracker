@@ -4,9 +4,9 @@
   "scripts": {
     "fetch:concord": "node scripts/fetch-concord.js",
     "fetch:mti": "node scripts/fetch-mti.js",
-    "build": "node scripts/fetch-mti.js && node scripts/fetch-concord.js"
+    "build": "node scripts/fetch-all.js || true"
   },
   "engines": {
-    "node": "22.x"
+    "node": "18.x"
   }
 }
