@@ -34,21 +34,23 @@ async function fetchConcord() {
   let page = 1;
 
   while (page < 300) {
-    const url = `https://shop.concordtheatricals.com/now-playing?Type=Object&HasValues=True&First=${page}&Last=${page}&Count=1&Root=%22table_page%22%3A%20%22${page}%22`;
+    const url = `https://shop.concordtheatricals.com/NowPlayingTableSource?table_page=${page}`;
 
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0"
+        "User-Agent": "Mozilla/5.0",
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "*/*"
       }
     });
 
-    const html = await res.text();
+    const text = await res.text();
 
-    console.log(`Concord page ${page} HTML size:`, html.length);
+    console.log("Page", page, "length:", text.length);
 
-    const rows = parseConcord(html);
+    const rows = parseConcord(text);
 
-    console.log(`Page ${page} parsed rows:`, rows.length);
+    console.log("Page", page, "rows:", rows.length);
 
     if (!rows.length) break;
 
