@@ -1,63 +1,38 @@
 const fs = require("fs");
 
-// Node 18+ on Netlify supports fetch
-// If not, fallback to node-fetch
-let fetchFn;
-
-if (global.fetch) {
-  fetchFn = global.fetch;
-} else {
-  fetchFn = (...args) =>
-    import("node-fetch").then(({ default: fetch }) => fetch(...args));
-}
-
-async function fetchTablePage(page) {
+async function fetchPage(page) {
   const url = `https://shop.concordtheatricals.com/now-playing?Type=Object&HasValues=True&First=${page}&Last=${page}&Count=1&Root=%22table_page%22%3A%20%22${page}%22`;
 
-  const res = await fetchFn(url);
-
-  if (!res.ok) {
-    console.log("Failed page:", page, res.status);
-    return "";
-  }
-
+  const res = await fetch(url);
   return await res.text();
 }
 
-function clean(html) {
-  return html
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function parseRows(html) {
+function parseConcordRows(html) {
   const rows = [];
-
   const trMatches = html.match(/<tr[\s\S]*?<\/tr>/g) || [];
 
   for (const tr of trMatches) {
-    if (tr.includes("tfoot")) continue;
+    if (tr.includes("tfoot") || !tr.includes("/p/")) continue;
 
-    const cellMatches = [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)];
+    const cells = [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)]
+      .map(m =>
+        m[1]
+          .replace(/<[^>]*>/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+      );
 
-    const cells = cellMatches.map(m => clean(m[1]));
-
-    if (cells.length < 6) continue;
-
-    const [title, venue, authors, city, state, start, end] = cells;
-
-    rows.push({
-      title: title || "N/A",
-      venue: venue || "N/A",
-      authors: authors || "N/A",
-      city: city || "N/A",
-      state: state || "N/A",
-      start: start || "N/A",
-      end: end || "N/A"
-    });
+    if (cells.length >= 6) {
+      rows.push({
+        title: cells[0],
+        venue: cells[1],
+        authors: cells[2],
+        city: cells[3],
+        state: cells[4],
+        start: cells[5],
+        end: cells[6]
+      });
+    }
   }
 
   return rows;
@@ -67,58 +42,30 @@ function parseRows(html) {
   let page = 1;
   let all = [];
 
-  console.log("Starting Concord scrape...");
+  while (true) {
+    console.log("Page", page);
 
-let page = 1;
-let all = [];
-let seen = new Set();
-
-while (true) {
-  console.log("Fetching page", page);
-
-  const html = await fetchTablePage(page);
-  const rows = parseRows(html);
-
-  if (!rows.length) break;
-
-  for (const r of rows) {
-    const key = `${r.title}-${r.venue}-${r.start}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    all.push(r);
-  }
-
-  // stop if page stops changing meaningfully
-  if (rows.length < 2) break;
-
-  page++;
-}
-    const html = await fetchTablePage(page);
-
-    const rows = parseRows(html);
-
-    console.log(`Page ${page}:`, rows.length);
+    const html = await fetchPage(page);
+    const rows = parseConcordRows(html);
 
     if (!rows.length) break;
 
     all.push(...rows);
     page++;
+
+    if (page > 500) break;
   }
 
-  const output = {
-    success: true,
-    count: all.length,
-    data: all,
-    source: "concord",
-    updated_at: new Date().toISOString()
-  };
+  fs.mkdirSync("public/data", { recursive: true });
 
- const path = "public/data/latest-concord.json";
+  fs.writeFileSync(
+    "public/data/latest-concord.json",
+    JSON.stringify({
+      success: true,
+      count: all.length,
+      data: all
+    }, null, 2)
+  );
 
-// ensure folder exists
-fs.mkdirSync("public/data", { recursive: true });
-
-fs.writeFileSync(path, JSON.stringify(output, null, 2));
-
-  console.log("Done Concord:", all.length);
+  console.log("DONE CONCORD:", all.length);
 })();
