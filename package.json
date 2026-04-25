@@ -2,9 +2,11 @@
   "name": "licensing-tracker",
   "version": "1.0.0",
   "scripts": {
+    "fetch:concord": "node scripts/fetch-concord.js",
+    "fetch:mti": "node scripts/fetch-mti.js",
     "build": "node scripts/fetch-all.js"
   },
   "engines": {
-    "node": "18.x"
+    "node": "22.x"
   }
 }
