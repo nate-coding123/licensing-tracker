@@ -1,71 +1,90 @@
 const fs = require("fs");
 
-// allow Node 18+ / Netlify fetch safety
-const fetchFn = global.fetch || ((...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args)));
+// -----------------------------
+// Safe fetch (Node 22 + Netlify)
+// -----------------------------
+const fetchFn = global.fetch;
 
 // -----------------------------
-// MTI FETCH (ROBUST SIMPLE VERSION)
+// MTI FETCH (JSON API)
 // -----------------------------
 async function fetchMTI() {
-  const url =
-    "https://www.mtishows.com/map-search-ajax.php?bounds_north=88.850418&bounds_south=-65.072130&bounds_east=180&bounds_west=-180&include_jr_shows=1&limit=100000";
+  try {
+    const url =
+      "https://www.mtishows.com/map-search-ajax.php?bounds_north=88.850418&bounds_south=-65.072130&bounds_east=80.859375&bounds_west=-480.937500&include_jr_shows=1&limit=100000";
 
-  const res = await fetchFn(url, {
-    headers: {
-      "user-agent": "Mozilla/5.0"
-    }
-  });
+    const res = await fetchFn(url);
+    const json = await res.json();
 
-  const json = await res.json();
+    console.log("MTI raw count:", json?.count);
 
-  // OLD RELIABLE FALLBACK (this is what was working before)
-  const data = json.data || [];
-
-  console.log("MTI raw keys:", Object.keys(json || {}));
-  console.log("MTI count:", data.length);
-
-  return data;
+    return json?.data || [];
+  } catch (err) {
+    console.log("MTI fetch failed:", err.message);
+    return [];
+  }
 }
 
 // -----------------------------
-// CONCORD FETCH (SAFE HTML PARSER)
+// CONCORD FETCH (XHR ENDPOINT)
 // -----------------------------
 async function fetchConcord() {
   const base =
-    "https://shop.concordtheatricals.com/now-playing";
+    "https://shop.concordtheatricals.com/now-playing/NowPlayingTableSource";
 
-  const url =
-    base +
-    "?Type=Object&HasValues=True&First=1&Last=1&Count=1&Root=%22table_page%22%3A%20%221%22";
+  const all = [];
+  let page = 1;
 
-  const res = await fetchFn(url, {
-    headers: {
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-      "accept":
-        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "accept-language": "en-US,en;q=0.9",
-      "referer": "https://shop.concordtheatricals.com/"
+  while (true) {
+    const url =
+      `${base}?Type=Object&HasValues=True&First=${page}&Last=${page}&Count=1&Root=%22table_page%22%3A%20%22${page}%22`;
+
+    try {
+      const res = await fetchFn(url, {
+        headers: {
+          "user-agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+          "referer": "https://shop.concordtheatricals.com/now-playing",
+          "x-requested-with": "XMLHttpRequest"
+        }
+      });
+
+      const html = await res.text();
+
+      const rows = parseConcordRows(html);
+
+      if (!rows.length) {
+        console.log(`Concord stopped at page ${page}`);
+        break;
+      }
+
+      all.push(...rows);
+
+      console.log(`Concord page ${page}: ${rows.length}`);
+
+      page++;
+
+      if (page > 1000) break; // safety cap
+    } catch (err) {
+      console.log("Concord error page", page, err.message);
+      break;
     }
-  });
+  }
 
-  const html = await res.text();
-
-  // DEBUG (important for you right now)
-  console.log("Concord HTML length:", html.length);
-
-  return parseConcordRows(html);
+  return all;
 }
+
+// -----------------------------
+// CONCORD PARSER (robust)
+// -----------------------------
 function parseConcordRows(html) {
   const rows = [];
 
   const trMatches = html.match(/<tr[\s\S]*?<\/tr>/g) || [];
 
   for (const tr of trMatches) {
-    // skip footer/pagination/header junk
-    if (tr.includes("tfoot")) continue;
-    if (tr.includes("paging")) continue;
     if (!tr.includes("/p/")) continue;
+    if (tr.includes("tfoot")) continue;
 
     const cells = [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)]
       .map(m =>
@@ -73,11 +92,9 @@ function parseConcordRows(html) {
           .replace(/<[^>]*>/g, "")
           .replace(/\s+/g, " ")
           .trim()
-      )
-      .filter(Boolean);
+      );
 
-    // MUST have at least title + venue
-    if (cells.length < 2) continue;
+    if (cells.length < 6) continue;
 
     rows.push({
       title: cells[0] || "",
@@ -90,63 +107,44 @@ function parseConcordRows(html) {
     });
   }
 
-  console.log("Parsed Concord rows:", rows.length);
   return rows;
 }
+
+// -----------------------------
+// WRITE SAFE FILE
+// -----------------------------
+function writeJSON(path, data) {
+  fs.mkdirSync(require("path").dirname(path), { recursive: true });
+
+  fs.writeFileSync(
+    path,
+    JSON.stringify(
+      {
+        success: true,
+        count: data.length,
+        data,
+        updated_at: new Date().toISOString()
+      },
+      null,
+      2
+    )
+  );
+}
+
 // -----------------------------
 // MAIN
 // -----------------------------
 (async () => {
   console.log("Starting scrape...");
 
-  let mti = [];
-  let concord = [];
+  const mti = await fetchMTI();
+  const concord = await fetchConcord();
 
-  try {
-    mti = await fetchMTI();
-  } catch (e) {
-    console.error("MTI failed:", e);
-  }
+  console.log("MTI FINAL:", mti.length);
+  console.log("CONCORD FINAL:", concord.length);
 
-  try {
-    concord = await fetchConcord();
-  } catch (e) {
-    console.error("Concord failed:", e);
-  }
+  writeJSON("public/data/latest-mti.json", mti);
+  writeJSON("public/data/latest-concord.json", concord);
 
-  // ensure folder exists
-  fs.mkdirSync("public/data", { recursive: true });
-
-  fs.writeFileSync(
-    "public/data/latest-mti.json",
-    JSON.stringify(
-      {
-        success: true,
-        count: mti.length,
-        data: mti,
-        source: "mti",
-        updated_at: new Date().toISOString()
-      },
-      null,
-      2
-    )
-  );
-
-  fs.writeFileSync(
-    "public/data/latest-concord.json",
-    JSON.stringify(
-      {
-        success: true,
-        count: concord.length,
-        data: concord,
-        source: "concord",
-        updated_at: new Date().toISOString()
-      },
-      null,
-      2
-    )
-  );
-
-  console.log("DONE MTI:", mti.length);
-  console.log("DONE CONCORD:", concord.length);
+  console.log("DONE ALL SCRAPES");
 })();
