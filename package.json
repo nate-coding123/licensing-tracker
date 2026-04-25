@@ -1,9 +1,8 @@
 {
-  "type": "module",
+  "name": "licensing-tracker",
+  "version": "1.0.0",
+  "private": true,
   "scripts": {
-    "fetch:mti": "node scripts/fetch-mti.js"
+    "build": "node scripts/fetch-all.js"
   }
-  "scripts": {
-  "build": "node scripts/fetch-all.js"
-}
 }
