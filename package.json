@@ -4,8 +4,7 @@
   "scripts": {
     "fetch:concord": "node scripts/fetch-concord.js",
     "fetch:mti": "node scripts/fetch-mti.js",
-    "fetch:all": "npm run fetch:concord && npm run fetch:mti",
-    "build": "npm run fetch:all"
+    "build": "node scripts/fetch-mti.js && node scripts/fetch-concord.js"
   },
   "engines": {
     "node": "22.x"
