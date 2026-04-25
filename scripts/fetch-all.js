@@ -1,149 +1,120 @@
 const fs = require("fs");
-const path = require("path");
 
-// ----------------------
-// SAFE FS HELPERS
-// ----------------------
-function ensureDir(dir) {
-  fs.mkdirSync(dir, { recursive: true });
+// Node 18+ / 22 safe fetch
+const fetchFn = global.fetch;
+
+// -----------------------------
+// CONCORD FETCH (PAGINATED HTML)
+// -----------------------------
+async function fetchConcordPage(page) {
+  const url = `https://shop.concordtheatricals.com/now-playing?Type=Object&HasValues=True&First=${page}&Last=${page}&Count=1&Root=%22table_page%22%3A%20%22${page}%22`;
+
+  const res = await fetchFn(url, {
+    headers: {
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+    }
+  });
+
+  return await res.text();
 }
 
-function writeJSON(filePath, data) {
-  ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
-
-// ----------------------
-// MTI FETCH (WORKING)
-// ----------------------
-async function fetchMTI() {
-  const url =
-    "https://www.mtishows.com/map-search-ajax.php?bounds_north=88.850418&bounds_south=-65.072130&bounds_east=180&bounds_west=-180&include_jr_shows=1&limit=100000";
-
-  const res = await fetch(url);
-  const json = await res.json();
-
-  return json.data || [];
-}
-
-// ----------------------
-// CONCORD FETCH
-// ----------------------
-async function fetchConcord() {
-  const results = [];
-  let page = 1;
-
-  while (page < 300) {
-    const url = `https://shop.concordtheatricals.com/NowPlayingTableSource?table_page=${page}`;
-
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-        "X-Requested-With": "XMLHttpRequest",
-        "Accept": "*/*"
-      }
-    });
-
-    const text = await res.text();
-
-    console.log("Page", page, "length:", text.length);
-
-    const rows = parseConcord(text);
-
-    console.log("Page", page, "rows:", rows.length);
-
-    if (!rows.length) break;
-
-    results.push(...rows);
-    page++;
-  }
-
-  return results;
-}
-
-// ----------------------
-// CONCORD PARSER (FIXED)
-// ----------------------
+// -----------------------------
+// FIXED PARSER (VERY IMPORTANT)
+// -----------------------------
 function parseConcord(html) {
   const rows = [];
 
+  // grab ALL table rows
   const trMatches = html.match(/<tr[\s\S]*?<\/tr>/g) || [];
 
   for (const tr of trMatches) {
-    // skip junk rows
-    if (tr.includes("tfoot")) continue;
-    if (tr.includes("paging")) continue;
+    if (tr.includes("tfoot") || tr.includes("paging")) continue;
 
     const cells = [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)]
       .map(m =>
         m[1]
           .replace(/<[^>]*>/g, "")
-          .replace(/&nbsp;/g, " ")
+          .replace(/&amp;/g, "&")
           .replace(/\s+/g, " ")
           .trim()
       );
 
-    // IMPORTANT: don't over-restrict (this was killing your results)
+    // IMPORTANT FIX:
+    // some rows include hidden columns or slightly different structure
     if (cells.length < 5) continue;
 
-    const title = cells[0];
-    if (!title || title.toLowerCase().includes("title")) continue;
+    const titleMatch = tr.match(/\/p\/\d+\//);
 
+    // DO NOT hard-filter too aggressively
     rows.push({
       title: cells[0] || "N/A",
       venue: cells[1] || "N/A",
       authors: cells[2] || "N/A",
       city: cells[3] || "N/A",
       state: cells[4] || "N/A",
-      start: cells[5] || "N/A",
-      end: cells[6] || "N/A"
+      start: cells[5] || "",
+      end: cells[6] || "",
+      hasLink: !!titleMatch
     });
   }
 
   return rows;
 }
 
-// ----------------------
-// MAIN RUNNER
-// ----------------------
+// -----------------------------
+// MAIN SCRAPER
+// -----------------------------
+async function fetchConcordAll() {
+  console.log("Fetching Concord...");
+
+  let page = 1;
+  let all = [];
+
+  while (page <= 500) {
+    console.log("Page", page);
+
+    const html = await fetchConcordPage(page);
+    const rows = parseConcord(html);
+
+    // DEBUG (IMPORTANT)
+    console.log(`Page ${page}: rows=${rows.length}`);
+
+    // STOP ONLY if page is truly empty
+    if (!rows.length) break;
+
+    all.push(...rows);
+    page++;
+  }
+
+  console.log("DONE CONCORD:", all.length);
+  return all;
+}
+
+// -----------------------------
+// RUN
+// -----------------------------
 (async () => {
-  console.log("Starting scrape...");
-
-  let mti = [];
-  let concord = [];
-
-  try {
-    console.log("Fetching MTI...");
-    mti = await fetchMTI();
-  } catch (e) {
-    console.log("MTI failed:", e.message);
-  }
-
-  try {
-    console.log("Fetching Concord...");
-    concord = await fetchConcord();
-  } catch (e) {
-    console.log("Concord failed:", e.message);
-  }
-
-  const base = path.join(process.cwd(), "public", "data");
-
-  ensureDir(base);
-
-  writeJSON(path.join(base, "latest-mti.json"), {
-    success: true,
-    count: mti.length,
-    data: mti,
-    updated_at: new Date().toISOString()
+  const concord = await fetchConcordAll().catch((e) => {
+    console.error("Concord failed:", e);
+    return [];
   });
 
-  writeJSON(path.join(base, "latest-concord.json"), {
-    success: true,
-    count: concord.length,
-    data: concord,
-    updated_at: new Date().toISOString()
-  });
+  fs.mkdirSync("public/data", { recursive: true });
 
-  console.log("\nDONE MTI:", mti.length);
-  console.log("DONE CONCORD:", concord.length);
+  fs.writeFileSync(
+    "public/data/latest-concord.json",
+    JSON.stringify(
+      {
+        success: true,
+        count: concord.length,
+        data: concord,
+        updated_at: new Date().toISOString()
+      },
+      null,
+      2
+    )
+  );
+
+  console.log("Saved concord:", concord.length);
 })();
