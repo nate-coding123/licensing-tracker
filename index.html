@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Licensing Tracker</title>
+</head>
+<body>
+  <h1>MTI Productions</h1>
+  <div id="count"></div>
+
+  <script>
+    fetch('data/latest-mti.json')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('count').innerText =
+          "Total productions: " + data.length;
+      });
+  </script>
+</body>
+</html>
