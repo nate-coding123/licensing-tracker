@@ -28,52 +28,47 @@ async function fetchMTI() {
 // -----------------------------
 // CONCORD FETCH (XHR ENDPOINT)
 // -----------------------------
+const fetch = require("node-fetch");
+
 async function fetchConcord() {
-  const base =
-    "https://shop.concordtheatricals.com/now-playing/NowPlayingTableSource";
-
   const all = [];
-  let page = 1;
 
-  while (true) {
-    const url =
-      `${base}?Type=Object&HasValues=True&First=${page}&Last=${page}&Count=1&Root=%22table_page%22%3A%20%22${page}%22`;
-
-    try {
-      const res = await fetchFn(url, {
+  for (let page = 1; page <= 200; page++) {
+    const res = await fetch(
+      "https://shop.concordtheatricals.com/now-playing",
+      {
+        method: "POST",
         headers: {
+          "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
           "user-agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-          "referer": "https://shop.concordtheatricals.com/now-playing",
-          "x-requested-with": "XMLHttpRequest"
-        }
-      });
-
-      const html = await res.text();
-
-      const rows = parseConcordRows(html);
-
-      if (!rows.length) {
-        console.log(`Concord stopped at page ${page}`);
-        break;
+          "x-requested-with": "XMLHttpRequest",
+          "referer":
+            "https://shop.concordtheatricals.com/now-playing"
+        },
+        body: new URLSearchParams({
+          Type: "Object",
+          HasValues: "True",
+          First: String(page),
+          Last: String(page),
+          Count: "1",
+          Root: `"table_page": "${page}"`
+        })
       }
+    );
 
-      all.push(...rows);
+    const html = await res.text();
+    const rows = parseConcordRows(html);
 
-      console.log(`Concord page ${page}: ${rows.length}`);
+    console.log(`Page ${page}:`, rows.length);
 
-      page++;
+    if (!rows.length) break;
 
-      if (page > 1000) break; // safety cap
-    } catch (err) {
-      console.log("Concord error page", page, err.message);
-      break;
-    }
+    all.push(...rows);
   }
 
   return all;
 }
-
 // -----------------------------
 // CONCORD PARSER (robust)
 // -----------------------------
