@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "scripts": {
+    "fetch:mti": "node scripts/fetch-mti.js"
+  }
+}
